@@ -1,46 +1,35 @@
-import socket
+import socket, io, pickle
+
+#config
+chunkSize = 1024#Change to improve preformance?
 
 
 class Tuna():
     def listen(port):
-        serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # get local machine name
-        host = ''#socket.gethostname()
-
-        # bind to the port
-        serversocket.bind((host, port))
-
-        serversocket.listen(2)# queue up to 2 requests
-
-        # establish a connection
-        clientsocket,addr = serversocket.accept()
-        file = open('newFile.png', 'wb')
+        serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)# create a socket object
+        serverSocket.bind(('', port))# bind to the port to any incoming address
+        serverSocket.listen(2)# queue up to 2 requests
+        clientSocket,addr = serverSocket.accept()# establish a connection
+        message = b''
         while True:
-            message = clientsocket.recv(1000000)
-            if not message:
-                break
-            file.write(message)
-        #clientsocket.close()
-        file.close()
-
-        return message
-
-
-    def send(port, host, filepath):
-
-        # create a socket object
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        # connection to hostname on the port
-        s.connect((host, port))
-
-        file = open(filepath, 'rb')
-        while True:
-            chunk = file.read(1000000)#1 mb
+            chunk = clientSocket.recv(chunkSize)
             if not chunk:
                 break
-            s.send(chunk)
+            message += chunk
+        return pickle.loads(message)
 
-        file.close()
-        s.close()
+    def send(port, host, objectToSend):
+        clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)# create a socket object
+        clientSocket.connect((host, port))
+        binaryStream = io.BytesIO()#Used so part of the byte array can be split up
+        binaryStream.write(pickle.dumps(objectToSend))#https://www.devdungeon.com/content/working-binary-data-python
+        x = pickle.dumps(objectToSend)
+        binaryStream.seek(0)# Move cursor back to the beginning of the buffer
+        while True:
+            chunk = binaryStream.read(chunkSize)#only get part of the bytes for the object
+            if not chunk:
+                break
+            clientSocket.send(chunk)
+
+        binaryStream.close()#discard the buffer in the memory
+        clientSocket.close()#close the connection when the item is sent
